@@ -5,6 +5,10 @@ apt install sudo -y
 
 # Define the cron job to be added
 cron_job="0 3 * * 0 /root/update_script.sh"
+mv update_script.sh /root/
+#protect update script from unauthorized edits
+chown root:root /root/update_script.sh
+chmod 700 /root/update_script.sh
 
 # Check if the cron job already exists in the crontab
 (crontab -l | grep -v -F "$cron_job"; echo "$cron_job") | crontab -
@@ -23,6 +27,30 @@ if [[ "$install_snmp" =~ ^[Yy](es)?$ ]]; then
 else
     echo "SNMP installation skipped."
 fi
+
+######### Setup New Admin User ###########
+USERNAME="CHANGEME"   # New Admin User to replace root login -----!!!!!!!!!!!!!!!!!! CHANGE THIS !!!!!!!!!!!!!!!!!!
+PASSWORD="CHANGEME54321" # TEMPORARY PASSWORD FOR New account login 
+
+# Create the user
+useradd -m $USERNAME
+
+#Set the TEMP password for the new user from the variable
+echo "$USERNAME:$PASSWORD" | chpasswd
+
+#Force user to change password on first login
+chage -d 0 $USERNAME
+echo "User $USERNAME created and password set."
+
+############## Lock Down Root Account #############
+echo "Now Locking Down Root User"
+usermod --append --groups sudo $USERNAME
+sudo usermod root --shell /sbin/nologin
+sudo passwd --lock root
+
+############# Update and Reboot System ##############
+echo "Updating System packages"
+sudo apt update -y && sudo apt upgrade -y && apt autoremove -y
 
 ######### Setup Fail2ban (OPTIONAL) ###########
 read -p "Do you want to install Fail2ban? (y/n): " install_f2b
@@ -45,32 +73,3 @@ EOF
 else
     echo "Fail2ban installation skipped."
 fi
-
-######### Setup New Admin User ###########
-USERNAME="CHANGEME"   # New Admin User to replace root login -----!!!!!!!!!!!!!!!!!! CHANGE THIS !!!!!!!!!!!!!!!!!!
-PASSWORD="CHANGEME54321" # TEMPORARY PASSWORD FOR New account login 
-
-# Create the user
-useradd -m $USERNAME
-
-# Set the password for the new user
-echo "$USERNAME:$PASSWORD" | chpasswd
-
-# Optional: force user to change password on first login
-chage -d 0 $USERNAME
-
-echo "User $USERNAME created and password set."
-
-############## Lock Down Root Account #############
-echo "Now Locking Down Root User"
-usermod --append --groups sudo $USERNAME
-sudo usermod root --shell /sbin/nologin
-sudo passwd --lock root
-
-############# Update and Reboot System ##############
-echo "Now Updating System, Reboot Soon"
-
-sudo apt update -y && sudo apt upgrade -y
-sudo apt autoremove -y
-
-sudo reboot now
